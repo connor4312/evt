@@ -12,11 +12,17 @@ const noOptions: EmitterOptions = {};
 const unset = Symbol('unset');
 const compactionThreshold = 2;
 
+class UniqueContainer<T> {
+  constructor(public readonly value: T) {}
+}
+
 /**
  * Base event emitter. Calls listeners when data is emitted.
  */
 export default class C4312Emitter<T> implements Emitter<T> {
-  private listeners?: Array<((data: T) => void) | undefined> | ((data: T) => void);
+  private listeners?:
+    | Array<UniqueContainer<(data: T) => void> | undefined>
+    | UniqueContainer<(data: T) => void>;
   private dispatching!: { value: T | typeof unset; lastL: number };
   public size = 0;
 
@@ -38,8 +44,8 @@ export default class C4312Emitter<T> implements Emitter<T> {
   public fire(value: T) {
     if (!this.listeners) {
       // no-op
-    } else if (typeof this.listeners === 'function') {
-      this.listeners(value);
+    } else if (this.listeners instanceof UniqueContainer) {
+      this.deliver(this.listeners, value);
     } else {
       if (this.dispatching.value !== unset) {
         while (this.dispatching.lastL < this.listeners.length) {
@@ -56,18 +62,18 @@ export default class C4312Emitter<T> implements Emitter<T> {
     }
   }
 
-  private deliver(listener: undefined | ((value: T) => void), value: T) {
+  private deliver(listener: undefined | UniqueContainer<(value: T) => void>, value: T) {
     if (!listener) {
       return;
     }
 
     if (!this.options.onListenerError) {
-      listener(value);
+      listener.value(value);
       return;
     }
 
     try {
-      listener(value);
+      listener.value(value);
     } catch (e) {
       this.options.onListenerError(e);
     }
@@ -77,34 +83,39 @@ export default class C4312Emitter<T> implements Emitter<T> {
    * Disposes of the emitter.
    */
   public dispose() {
-    this.listeners = undefined;
+    if (this.dispatching.value === unset) {
+      this.listeners = undefined;
+    } else {
+      this.listeners = [];
+    }
   }
 
   private add(listener: (data: T) => void): IDisposable {
+    const contained = new UniqueContainer(listener);
     if (!this.listeners) {
       this.options.onWillAddFirstListener?.(this);
-      this.listeners = listener;
+      this.listeners = contained;
       this.options.onDidAddFirstListener?.(this);
-    } else if (typeof this.listeners === 'function') {
+    } else if (this.listeners instanceof UniqueContainer) {
       this.dispatching = { value: unset, lastL: 0 };
-      this.listeners = [this.listeners, listener];
+      this.listeners = [this.listeners, contained];
     } else {
-      this.listeners.push(listener);
+      this.listeners.push(contained);
     }
 
     this.size++;
 
-    return { dispose: () => this.rm(listener) };
+    return { dispose: () => this.rm(contained) };
   }
 
-  private rm(listener: (data: T) => void) {
+  private rm(listener: UniqueContainer<(data: T) => void>) {
     this.options.onWillRemoveListener?.(this);
 
     if (!this.listeners) {
       return;
     }
 
-    if (typeof this.listeners === 'function') {
+    if (this.listeners instanceof UniqueContainer) {
       if (this.listeners === listener) {
         this.listeners = undefined;
         this.options.onDidRemoveLastListener?.(this);

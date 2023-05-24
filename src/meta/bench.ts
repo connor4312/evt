@@ -1,6 +1,6 @@
 import { spawnSync } from 'child_process';
 import { allImplementations } from './test-util';
-const listenerCounts = [0, 1, 3, 10, 1000];
+const listenerCounts = [0, 1, 3, 10, 100];
 const listenerFns = new Array(listenerCounts[listenerCounts.length - 1])
   .fill(undefined)
   .map(() => () => {});

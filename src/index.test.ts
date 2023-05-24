@@ -38,6 +38,35 @@ for (const { name, impl: EventEmitter } of allImplementations) {
         expect(fn.mock.calls).to.deep.equal([['foo'], ['bar']]);
       });
 
+      it('Emitter duplicate functions', () => {
+        let calls: string[] = [];
+        const a = (v: string) => calls.push(`a${v}`);
+        const b = (v: string) => calls.push(`b${v}`);
+
+        const emitter = new EventEmitter<string>();
+
+        const s1 = emitter.event(a);
+        emitter.event(b);
+        const s2 = emitter.event(a);
+
+        emitter.fire('1');
+        expect(calls).toStrictEqual(['a1', 'b1', 'a1']);
+
+        s2.dispose();
+        calls.length = 0;
+        emitter.fire('2');
+        expect(calls).toStrictEqual(['a2', 'b2']);
+      });
+
+      it('Emitter dispose during emission', () => {
+        const fn = vi.fn();
+        const emitter = new EventEmitter<string>();
+        emitter.event(() => emitter.dispose());
+        emitter.event(fn);
+        emitter.fire('hello');
+        expect(fn.mock.calls).to.deep.equal([]);
+      });
+
       it('Emitter, bucket', () => {
         const bucket: IDisposable[] = [];
         const fn = vi.fn();
